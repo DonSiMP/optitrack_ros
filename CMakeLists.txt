@@ -144,6 +144,11 @@ add_executable(optitrack_markers src/optitrack_markers.cpp)
 target_link_libraries(optitrack_markers ${catkin_LIBRARIES} ${roscpp_LIBRARIES} ${PCL_LIBRARIES})
 
 
+add_executable(travelling_salesman src/travelling_salesman.cpp)
+target_link_libraries(travelling_salesman ${catkin_LIBRARIES} ${roscpp_LIBRARIES} ${PCL_LIBRARIES})
+
+
+
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
