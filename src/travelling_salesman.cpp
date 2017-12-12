@@ -19,7 +19,7 @@
 #include <pcl/kdtree/kdtree.h>
 #include <pcl/segmentation/extract_clusters.h>
 #define PI 3.14159265
-
+#define SQR(a) ((a)*(a))
 
 using boost::shared_ptr;
 using std::string;
@@ -28,6 +28,114 @@ using namespace sensor_msgs;
 
 
 ros::Publisher pub;
+
+
+void rearrange(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud){
+	// std::cout << cloud->points[0].x << '\n';
+	for(int i = 1; i < cloud->size();i++){
+			if(cloud->points[i].x < cloud->points[0].x){
+				pcl::PointXYZRGB temp;
+				temp = cloud->points[0];
+				cloud->points[0] = cloud->points[i];
+				cloud->points[i] = temp;
+			}
+			// std::cout << cloud->points[0].x << '\n';
+		}
+
+}
+
+
+void nearest_neighbor(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud){
+	// pcl::PointCloud<pcl::PointXYZRGB>::Ptr sorted_cloud (new pcl::PointCloud<pcl::PointXYZRGB> ());
+//	*sorted_cloud = *cloud;
+	for(int i = 1; i < cloud->size();i++){
+		pcl::PointXYZRGB p;
+		// p = sorted_cloud[i-1];
+		p = cloud->points[i-1];
+		pcl::PointXYZRGB q;
+		q = cloud->points[i];
+		float min_dist = sqrt(SQR(p.x-q.x) +SQR(p.y-q.y)+SQR(p.z-q.z));
+		for (int j= i+1; j< cloud->size();j++){
+			q = cloud->points[j];
+			float dist = sqrt(SQR(p.x-q.x) +SQR(p.y-q.y)+SQR(p.z-q.z));
+			if(dist < min_dist){
+				min_dist = dist;
+				pcl::PointXYZRGB temp;
+				temp = cloud->points[i];
+				cloud->points[i] = cloud->points[j];
+				cloud->points[j] = temp;
+			}
+
+		}
+
+	}
+}
+
+
+float calculateTotalDistance(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud){
+	float dist = 0;
+	for(int i = 0; i< cloud->size()-1;i++){
+		pcl::PointXYZRGB p = cloud->points[i];
+		pcl::PointXYZRGB q = cloud->points[i+1];
+		dist  += sqrt(SQR(p.x-q.x) +SQR(p.y-q.y)+SQR(p.z-q.z));
+	}
+}
+
+
+void two_optSwap(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& existing_route,
+			  pcl::PointCloud<pcl::PointXYZRGB>::Ptr& new_route,
+			  int i,int k){
+		//std::cout << "here3" << '\n';
+			// 1. take route[0] to route[i-1] and add them in order to new_route
+			 for ( int c = 0; c <= i - 1; ++c )
+			 {
+				 new_route->push_back(existing_route->points[c]);
+			 }
+			 // 2. take route[i] to route[k] and add them in reverse order to new_route
+			 for ( int c = k; c >= i; --c )
+			 {
+				 new_route->push_back(existing_route->points[c]);
+			 }
+			 // 3. take route[k+1] to end and add them in order to new_route
+			 for ( int c = k + 1; c < existing_route->size(); ++c )
+			 {
+				 new_route->push_back(existing_route->points[c]);
+			 }
+
+}
+
+
+void two_opt(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& existing_route){
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr new_route (new pcl::PointCloud<pcl::PointXYZRGB> ());
+	bool improvement = true;
+	//std::cout << "here1" << '\n';
+
+	while(improvement){
+
+			improvement = false;
+			float best_distance = calculateTotalDistance(existing_route);
+			std::cout << "best_distance" << best_distance<<'\n';
+			for (int i = 1; i < existing_route->size() - 1; i++) {
+				for (int k = i; k < existing_route->size(); k++) {
+					new_route->clear();
+					two_optSwap(existing_route, new_route, i, k);
+					float new_distance = calculateTotalDistance(new_route);
+					// std::cout << "new_distance" << new_distance<<'\n';
+					if (new_distance < best_distance) {
+						best_distance = new_distance;
+						*existing_route = *new_route;
+						improvement = true;
+						std::cout << "swapped" << '\n';
+					}
+					// else
+	                //     improvement = false;
+				}
+			}
+	}
+// *existing_route = *new_route;
+}
+
+
 
 
 void euclideancluster (const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
@@ -73,9 +181,41 @@ void euclideancluster (const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
 			point.b = 255 ;
     	    cluster->push_back(point);
     	}
+
+		std::cout << "before sorting" << '\n';
+		for(int i = 0; i< cluster->size();i++){
+			std::cout << cluster->points[i].x <<" "<< cluster->points[i].y <<" "<< cluster->points[i].z << endl;
+		}
+
+
+	    rearrange(cluster);
+		std::cout << "rearrange" << '\n';
+		for(int i = 0; i< cluster->size();i++){
+			std::cout << cluster->points[i].x <<" "<< cluster->points[i].y <<" "<< cluster->points[i].z << endl;
+		}
+
+		nearest_neighbor(cluster);
+
+		std::cout << "after sorting" << '\n';
+		for(int i = 0; i< cluster->size();i++){
+			std::cout << cluster->points[i].x <<" "<< cluster->points[i].y <<" "<< cluster->points[i].z << endl;
+		}
+
+		two_opt(cluster);
+
+		std::cout << "after two_opt" << '\n';
+		for(int i = 0; i< cluster->size();i++){
+			std::cout << cluster->points[i].x <<" "<< cluster->points[i].y <<" "<< cluster->points[i].z << endl;
+		}
+
+
     }
 
     *cloud_out = *cluster;
+
+
+
+
 }
 
 
@@ -118,8 +258,8 @@ void cloud_cb(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
 	// Publish the data
 	pub.publish(output);
 
-
 }
+
 
 int main(int argc, char** argv)
 {
